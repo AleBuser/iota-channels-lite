@@ -1,5 +1,5 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_imports))]
-use crate::channels::payload::json::Payload;
+use crate::utils::payload::json::Payload;
 use failure::Fallible;
 use iota_lib_rs::prelude::iota_client;
 use iota_streams::app::transport::tangle::client::SendTrytesOptions;
@@ -104,10 +104,15 @@ impl Channel {
     pub fn read_signed<T>(
         &mut self,
         signed_packet_tag: String,
+        change_key_tag: Option<String>,
     ) -> Fallible<Vec<(Option<T>, Option<T>)>>
     where
         T: DeserializeOwned,
     {
+        if change_key_tag.is_some() {
+            self.update_change_key(change_key_tag.unwrap()).unwrap();
+        }
+
         let mut response: Vec<(Option<T>, Option<T>)> = Vec::new();
 
         if self.is_connected {

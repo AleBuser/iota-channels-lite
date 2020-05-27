@@ -1,6 +1,7 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_imports))]
 
-use crate::channels::payload::PacketPayload;
+use crate::utils::payload::PacketPayload;
+use crate::utils::response_write_signed::ResponseSigned;
 use failure::Fallible;
 use iota_lib_rs::prelude::iota_client;
 use iota_streams::app::transport::tangle::client::SendTrytesOptions;
@@ -102,10 +103,12 @@ impl Channel {
         Ok(self.keyload_tag.clone())
     }
 
-    pub fn write_signed<T>(&mut self, masked: bool, payload: T) -> Result<String, &str>
+    pub fn write_signed<T>(&mut self, masked: bool, payload: T) -> Result<ResponseSigned, &str>
     where
         T: PacketPayload,
     {
+        let change_key_tag = self.try_change_key(false).unwrap();
+
         let keyload_link = Address::from_str(&self.channel_address, &self.keyload_tag).unwrap();
 
         let signed_packet_link = {
@@ -138,7 +141,10 @@ impl Channel {
             }
         };
 
-        Ok(signed_packet_link.msgid.to_string())
+        Ok(ResponseSigned {
+            signed_message_tag: signed_packet_link.msgid.to_string(),
+            change_key_tag: change_key_tag,
+        })
     }
 
     pub fn write_tagged<T>(&mut self, payload: T) -> Result<String, &str>
