@@ -3,7 +3,6 @@
 //!
 #![deny(
     bad_style,
-    missing_docs,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_code,

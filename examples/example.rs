@@ -63,7 +63,6 @@ async fn main() -> Fallible<()> {
 
     //Add subscriber
     let keyload_tag = channel_author.add_subscriber(subscription_tag).unwrap();
-    println!("Author key: {}", keyload_tag);
 
     //Write signed public message
     let signed_packed_tag_public = channel_author
@@ -73,6 +72,7 @@ async fn main() -> Fallible<()> {
         )
         .unwrap();
     println!("Author: Sent signed public message");
+    println!("MsgId {:?}", signed_packed_tag_public);
 
     //Write signed masked message
     let signed_packed_tag_masked = channel_author
@@ -84,6 +84,7 @@ async fn main() -> Fallible<()> {
         )
         .unwrap();
     println!("Author: Sent signed masked message");
+    println!("MsgId {:?}", signed_packed_tag_masked);
 
     //Write tagged message
     let tagged_packed_tag: String = channel_author
@@ -95,6 +96,7 @@ async fn main() -> Fallible<()> {
         )
         .unwrap();
     println!("Author: Sent tagged message");
+    println!("MsgId {:?}", tagged_packed_tag);
 
     //Give messages some time to propagate
     println!("Waiting for propagation... ({}s)", delay_time * 2);
@@ -102,6 +104,10 @@ async fn main() -> Fallible<()> {
 
     channel_subscriber.update_keyload(keyload_tag).unwrap();
     println!("Subscriber: Updated keyload");
+
+    channel_subscriber.get_next_message();
+
+    /*
 
     //Read all signed messages
     let list_signed_public: Vec<(Option<String>, Option<String>)> = channel_subscriber
@@ -139,6 +145,10 @@ async fn main() -> Fallible<()> {
             public, masked
         )
     }
+
+
+
+    */
 
     //Give messages some time to propagate
     println!("Waiting for propagation... ({}s)", delay_time);
