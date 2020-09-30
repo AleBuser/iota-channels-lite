@@ -177,7 +177,6 @@ impl Channel {
 
         Ok(tagged_packet_link.msgid.to_string())
     }
-
     /*
     ///
     /// Remove subscriber

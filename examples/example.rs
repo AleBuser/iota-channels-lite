@@ -31,7 +31,7 @@ impl SensorData {
 #[tokio::main]
 async fn main() -> Fallible<()> {
     let seed_author = None;
-    let seed_subscriber = Some("SOME9SUBSCRIBER9SEETKEWWXBXA".to_string());
+    let seed_subscriber = None;
     let delay_time: u64 = 20;
 
     //Create Channel Instance for author
@@ -55,7 +55,7 @@ async fn main() -> Fallible<()> {
 
     //Connect to channel
     let subscription_tag = channel_subscriber.connect().unwrap();
-    println!("Subscriber: Connected to channel");
+    println!("Subscriber: Connected to channel: {}", subscription_tag);
 
     //Give messages some time to propagate
     println!("Waiting for propagation... ({}s)", delay_time);
@@ -144,10 +144,6 @@ async fn main() -> Fallible<()> {
             public, masked
         )
     }
-
-    //Give messages some time to propagate
-    println!("Waiting for propagation... ({}s)", delay_time);
-    thread::sleep(Duration::from_secs(delay_time));
 
     /*
     //Disconnect from channel
