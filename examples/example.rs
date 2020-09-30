@@ -31,7 +31,7 @@ impl SensorData {
 #[tokio::main]
 async fn main() -> Fallible<()> {
     let seed_author = None;
-    let seed_subscriber = Some("SOME9SUBSCRIBER9SEETKEW".to_string());
+    let seed_subscriber = Some("SOME9SUBSCRIBER9SEETKEWWXBXA".to_string());
     let delay_time: u64 = 20;
 
     //Create Channel Instance for author
@@ -63,31 +63,33 @@ async fn main() -> Fallible<()> {
 
     //Add subscriber
     let keyload_tag = channel_author.add_subscriber(subscription_tag).unwrap();
+    println!("Author: keyload_tag ID: {} ", keyload_tag);
+
+    //Give messages some time to propagate
+    println!("Waiting for propagation... ({}s)", delay_time);
+    thread::sleep(Duration::from_secs(delay_time));
+
+    channel_subscriber.update_keyload(keyload_tag).unwrap();
+    println!("Subscriber: Updated keyload");
 
     //Write signed public message
-    let signed_packed_tag_public = channel_author
-        .write_signed(
-            false,
-            PayloadBuilder::new().public(&SensorData::new(1.0))?.build(),
-        )
+    channel_author
+        .write_signed(PayloadBuilder::new().public(&SensorData::new(1.0))?.build())
         .unwrap();
     println!("Author: Sent signed public message");
-    println!("MsgId {:?}", signed_packed_tag_public);
 
     //Write signed masked message
-    let signed_packed_tag_masked = channel_author
+    channel_author
         .write_signed(
-            false,
             PayloadBuilder::new()
                 .masked(&SensorData::new(19.0))?
                 .build(),
         )
         .unwrap();
     println!("Author: Sent signed masked message");
-    println!("MsgId {:?}", signed_packed_tag_masked);
 
     //Write tagged message
-    let tagged_packed_tag: String = channel_author
+    channel_author
         .write_tagged(
             PayloadBuilder::new()
                 .public(&SensorData::new(17.0))?
@@ -96,18 +98,15 @@ async fn main() -> Fallible<()> {
         )
         .unwrap();
     println!("Author: Sent tagged message");
-    println!("MsgId {:?}", tagged_packed_tag);
 
     //Give messages some time to propagate
     println!("Waiting for propagation... ({}s)", delay_time * 2);
     thread::sleep(Duration::from_secs(delay_time * 2));
 
-    channel_subscriber.update_keyload(keyload_tag).unwrap();
-    println!("Subscriber: Updated keyload");
-
     channel_subscriber.get_next_message();
-
-    /*
+    let signed_packed_tag_public = channel_subscriber.get_next_message().unwrap();
+    let signed_packed_tag_masked = channel_subscriber.get_next_message().unwrap();
+    let tagged_packed_tag = channel_subscriber.get_next_message().unwrap();
 
     //Read all signed messages
     let list_signed_public: Vec<(Option<String>, Option<String>)> = channel_subscriber
@@ -145,10 +144,6 @@ async fn main() -> Fallible<()> {
             public, masked
         )
     }
-
-
-
-    */
 
     //Give messages some time to propagate
     println!("Waiting for propagation... ({}s)", delay_time);

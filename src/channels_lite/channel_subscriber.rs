@@ -220,63 +220,56 @@ impl Channel {
     ///
     /// Generates the next message in the channels
     ///
-    pub fn get_next_message(&mut self) {
-        {
-            let mut exists = true;
+    pub fn get_next_message(&mut self) -> Option<String> {
+        let ids = self.subscriber.gen_next_msg_ids(false);
 
-            while exists {
-                let ids = self.subscriber.gen_next_msg_ids(false);
-                exists = false;
+        let mut tag: Option<String> = None;
 
-                println!("Deriving MsgId for {:?} messages ", ids.len());
+        for (_pk, SequencingState(next_id, seq_num)) in ids.iter() {
+            let msg = iota_client::Client::get()
+                .recv_message_with_options(&next_id, RecvOptions { flags: 0 })
+                .ok();
 
-                for (_pk, SequencingState(next_id, seq_num)) in ids.iter() {
-                    let msg = iota_client::Client::get()
-                        .recv_message_with_options(&next_id, RecvOptions { flags: 0 })
-                        .ok();
+            if msg.is_none() {
+                continue;
+            }
 
-                    println!("Msg Id {:?}", &next_id.msgid);
-                    if msg.is_none() {
-                        continue;
+            let unwrapped = msg.unwrap();
+
+            loop {
+                let preparsed = unwrapped.parse_header().unwrap();
+                match preparsed.header.content_type.0 {
+                    message::SIGNED_PACKET => {
+                        let _unwrapped = self.subscriber.unwrap_signed_packet(preparsed.clone());
+                        println!("Derived a signed packet");
+                        println!("Msg Id {:?}", &next_id.msgid);
+                        tag = Some(next_id.msgid.to_string());
+                        break;
                     }
-
-                    let unwrapped = msg.unwrap();
-
-                    loop {
-                        let preparsed = unwrapped.parse_header().unwrap();
-                        match preparsed.header.content_type.0 {
-                            message::SIGNED_PACKET => {
-                                let _unwrapped =
-                                    self.subscriber.unwrap_signed_packet(preparsed.clone());
-                                println!("Found a signed packet");
-                                break;
-                            }
-                            message::TAGGED_PACKET => {
-                                let _unwrapped =
-                                    self.subscriber.unwrap_tagged_packet(preparsed.clone());
-                                println!("Found a tagged packet");
-                                break;
-                            }
-                            message::KEYLOAD => {
-                                let _unwrapped = self.subscriber.unwrap_keyload(preparsed.clone());
-                                println!("Found a keyload packet");
-                                break;
-                            }
-                            _ => {
-                                println!("Not a recognised type... {}", preparsed.content_type());
-                                break;
-                            }
-                        }
+                    message::TAGGED_PACKET => {
+                        let _unwrapped = self.subscriber.unwrap_tagged_packet(preparsed.clone());
+                        println!("Derived a tagged packet");
+                        println!("Msg Id {:?}", &next_id.msgid);
+                        tag = Some(next_id.msgid.to_string());
+                        break;
                     }
-                    self.subscriber
-                        .store_state_for_all(next_id.clone(), *seq_num);
-                    exists = true;
-                }
-
-                if !exists {
-                    println!("No more messages in sequence.");
+                    message::KEYLOAD => {
+                        let _unwrapped = self.subscriber.unwrap_keyload(preparsed.clone());
+                        println!("Derived a keyload packet");
+                        println!("Msg Id {:?}", &next_id.msgid);
+                        tag = Some(next_id.msgid.to_string());
+                        break;
+                    }
+                    _ => {
+                        println!("Not a recognised type... {}", preparsed.content_type());
+                        break;
+                    }
                 }
             }
+            self.subscriber
+                .store_state_for_all(next_id.clone(), *seq_num);
         }
+
+        tag
     }
 }
