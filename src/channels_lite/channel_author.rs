@@ -25,6 +25,7 @@ pub struct Channel {
     channel_address: String,
     announcement_id: String,
     last_keyload_tag: String,
+    previous_msg_tag: String,
 }
 
 impl Channel {
@@ -47,6 +48,7 @@ impl Channel {
             channel_address: channel_address,
             announcement_id: String::default(),
             last_keyload_tag: String::default(),
+            previous_msg_tag: String::default(),
         }
     }
 
@@ -90,8 +92,11 @@ impl Channel {
             }
         }
 
+        let announce_link =
+            Address::from_str(&self.channel_address, &self.announcement_id).unwrap();
+
         self.last_keyload_tag = {
-            let keyload = self.author.share_keyload_for_everyone(&subscribe_link)?;
+            let keyload = self.author.share_keyload_for_everyone(&announce_link)?;
             iota_client::Client::get().send_message_with_options(&keyload.0, self.send_opt)?;
             keyload.0.link.msgid.to_string()
         };
@@ -102,12 +107,12 @@ impl Channel {
     ///
     /// Write signed packet
     ///
-    pub fn write_signed<T>(&mut self, masked: bool, payload: T) -> Result<String>
+    pub fn write_signed<T>(&mut self, payload: T) -> Result<String>
     where
         T: PacketPayload,
     {
         let signed_packet_link = {
-            if masked {
+            if self.previous_msg_tag == String::default() {
                 let keyload_link =
                     Address::from_str(&self.channel_address, &self.last_keyload_tag).unwrap();
                 let msg = self.author.sign_packet(
@@ -120,7 +125,7 @@ impl Channel {
                 ret_link.link.clone()
             } else {
                 let msg = self.author.sign_packet(
-                    &Address::from_str(&self.channel_address, &self.announcement_id).unwrap(),
+                    &Address::from_str(&self.channel_address, &self.previous_msg_tag).unwrap(),
                     &payload.public_data(),
                     &payload.masked_data(),
                 )?;
@@ -129,6 +134,8 @@ impl Channel {
                 ret_link.link.clone()
             }
         };
+
+        self.previous_msg_tag = signed_packet_link.msgid.to_string().clone();
 
         Ok(signed_packet_link.msgid.to_string())
     }
@@ -140,23 +147,36 @@ impl Channel {
     where
         T: PacketPayload,
     {
-        let keyload_link =
+        let _keyload_link =
             Address::from_str(&self.channel_address, &self.last_keyload_tag).unwrap();
-
         let tagged_packet_link = {
-            let msg = self.author.tag_packet(
-                &keyload_link,
-                &payload.public_data(),
-                &payload.masked_data(),
-            )?;
-            let ret_link = msg.0;
-            iota_client::Client::get().send_message_with_options(&ret_link, self.send_opt)?;
-            ret_link.link.clone()
+            if self.previous_msg_tag == String::default() {
+                let keyload_link =
+                    Address::from_str(&self.channel_address, &self.last_keyload_tag).unwrap();
+                let msg = self.author.tag_packet(
+                    &keyload_link,
+                    &payload.public_data(),
+                    &payload.masked_data(),
+                )?;
+                let ret_link = msg.0;
+                iota_client::Client::get().send_message_with_options(&ret_link, self.send_opt)?;
+                ret_link.link.clone()
+            } else {
+                let previous_msg_link =
+                    Address::from_str(&self.channel_address, &self.previous_msg_tag).unwrap();
+                let msg = self.author.tag_packet(
+                    &previous_msg_link,
+                    &payload.public_data(),
+                    &payload.masked_data(),
+                )?;
+                let ret_link = msg.0;
+                iota_client::Client::get().send_message_with_options(&ret_link, self.send_opt)?;
+                ret_link.link.clone()
+            }
         };
 
         Ok(tagged_packet_link.msgid.to_string())
     }
-
     /*
     ///
     /// Remove subscriber

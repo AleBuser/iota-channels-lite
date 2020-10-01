@@ -10,7 +10,10 @@ use iota_streams::app::transport::tangle::{
 };
 use iota_streams::app::transport::Transport;
 use iota_streams::app_channels::{
-    api::tangle::{Address, Subscriber},
+    api::{
+        tangle::{Address, Subscriber},
+        SequencingState,
+    },
     message,
 };
 
@@ -20,7 +23,7 @@ use anyhow::Result;
 /// Channel subscriber
 ///
 pub struct Channel {
-    subscriber: Subscriber,
+    pub subscriber: Subscriber,
     is_connected: bool,
     send_opt: SendTrytesOptions,
     announcement_link: Address,
@@ -60,7 +63,7 @@ impl Channel {
     ///
     pub fn connect(&mut self) -> Result<String> {
         let message_list = iota_client::Client::get()
-            .recv_messages_with_options(&self.announcement_link, RecvOptions::default())?;
+            .recv_messages_with_options(&self.announcement_link, RecvOptions { flags: 0 })?;
 
         let mut found_valid_msg = false;
 
@@ -112,7 +115,7 @@ impl Channel {
         if self.is_connected {
             let link = Address::from_str(&self.channel_address, &signed_packet_tag).unwrap();
             let message_list = iota_client::Client::get()
-                .recv_messages_with_options(&link, RecvOptions::default())?;
+                .recv_messages_with_options(&link, RecvOptions { flags: 0 })?;
 
             for tx in message_list.iter() {
                 let header = tx.parse_header()?;
@@ -154,7 +157,7 @@ impl Channel {
             let link = Address::from_str(&self.channel_address, &tagged_packet_tag).unwrap();
 
             let message_list = iota_client::Client::get()
-                .recv_messages_with_options(&link, RecvOptions::default())?;
+                .recv_messages_with_options(&link, RecvOptions { flags: 0 })?;
 
             for tx in message_list.iter() {
                 let header = tx.parse_header()?;
@@ -191,7 +194,7 @@ impl Channel {
 
         if self.is_connected {
             let message_list = iota_client::Client::get()
-                .recv_messages_with_options(&keyload_link, RecvOptions::default())?;
+                .recv_messages_with_options(&keyload_link, RecvOptions { flags: 0 })?;
 
             for tx in message_list.iter() {
                 let header = tx.parse_header()?;
@@ -212,5 +215,61 @@ impl Channel {
         }
 
         Ok(())
+    }
+
+    ///
+    /// Generates the next message in the channels
+    ///
+    pub fn get_next_message(&mut self) -> Option<String> {
+        let ids = self.subscriber.gen_next_msg_ids(false);
+
+        let mut tag: Option<String> = None;
+
+        for (_pk, SequencingState(next_id, seq_num)) in ids.iter() {
+            let msg = iota_client::Client::get()
+                .recv_message_with_options(&next_id, RecvOptions { flags: 0 })
+                .ok();
+
+            if msg.is_none() {
+                continue;
+            }
+
+            let unwrapped = msg.unwrap();
+
+            loop {
+                let preparsed = unwrapped.parse_header().unwrap();
+                match preparsed.header.content_type.0 {
+                    message::SIGNED_PACKET => {
+                        let _unwrapped = self.subscriber.unwrap_signed_packet(preparsed.clone());
+                        println!("Derived a signed packet");
+                        println!("Msg Id {:?}", &next_id.msgid);
+                        tag = Some(next_id.msgid.to_string());
+                        break;
+                    }
+                    message::TAGGED_PACKET => {
+                        let _unwrapped = self.subscriber.unwrap_tagged_packet(preparsed.clone());
+                        println!("Derived a tagged packet");
+                        println!("Msg Id {:?}", &next_id.msgid);
+                        tag = Some(next_id.msgid.to_string());
+                        break;
+                    }
+                    message::KEYLOAD => {
+                        let _unwrapped = self.subscriber.unwrap_keyload(preparsed.clone());
+                        println!("Derived a keyload packet");
+                        println!("Msg Id {:?}", &next_id.msgid);
+                        tag = Some(next_id.msgid.to_string());
+                        break;
+                    }
+                    _ => {
+                        println!("Not a recognised type... {}", preparsed.content_type());
+                        break;
+                    }
+                }
+            }
+            self.subscriber
+                .store_state_for_all(next_id.clone(), *seq_num);
+        }
+
+        tag
     }
 }
