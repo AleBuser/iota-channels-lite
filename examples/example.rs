@@ -32,10 +32,10 @@ impl SensorData {
 async fn main() -> Fallible<()> {
     let seed_author = None;
     let seed_subscriber = None;
-    let delay_time: u64 = 20;
+    let delay_time: u64 = 40;
 
     //Create Channel Instance for author
-    let mut channel_author = channel_author::Channel::new(Network::Devnet, seed_author);
+    let mut channel_author = channel_author::Channel::new(Network::Main, seed_author);
 
     //Open Channel
     let (channel_address, announcement_tag) = channel_author.open().unwrap();
@@ -73,23 +73,23 @@ async fn main() -> Fallible<()> {
     println!("Subscriber: Updated keyload");
 
     //Write signed public message
-    channel_author
+    let s0 = channel_author
         .write_signed(PayloadBuilder::new().public(&SensorData::new(1.0))?.build())
         .unwrap();
-    println!("Author: Sent signed public message");
+    println!("Author: Sent signed public message: {}", s0);
 
     //Write signed masked message
-    channel_author
+    let s1 = channel_author
         .write_signed(
             PayloadBuilder::new()
                 .masked(&SensorData::new(19.0))?
                 .build(),
         )
         .unwrap();
-    println!("Author: Sent signed masked message");
+    println!("Author: Sent signed masked message: {}", s1);
 
     //Write tagged message
-    channel_author
+    let s2 = channel_author
         .write_tagged(
             PayloadBuilder::new()
                 .public(&SensorData::new(17.0))?
@@ -97,20 +97,17 @@ async fn main() -> Fallible<()> {
                 .build(),
         )
         .unwrap();
-    println!("Author: Sent tagged message");
+    println!("Author: Sent tagged message: {}", s2);
 
     //Give messages some time to propagate
     println!("Waiting for propagation... ({}s)", delay_time * 2);
     thread::sleep(Duration::from_secs(delay_time * 2));
 
-    channel_subscriber.get_next_message();
-    let signed_packed_tag_public = channel_subscriber.get_next_message().unwrap();
-    let signed_packed_tag_masked = channel_subscriber.get_next_message().unwrap();
-    let tagged_packed_tag = channel_subscriber.get_next_message().unwrap();
+    let tags = channel_subscriber.get_next_message();
 
     //Read all signed messages
     let list_signed_public: Vec<(Option<String>, Option<String>)> = channel_subscriber
-        .read_signed(signed_packed_tag_public)
+        .read_signed(tags[1].clone().unwrap())
         .unwrap();
     println!("Subscriber: Reading signed public messages");
     for msg in list_signed_public.iter() {
@@ -122,7 +119,7 @@ async fn main() -> Fallible<()> {
     }
 
     let list_signed_masked: Vec<(Option<String>, Option<String>)> = channel_subscriber
-        .read_signed(signed_packed_tag_masked)
+        .read_signed(tags[2].clone().unwrap())
         .unwrap();
     println!("Subscriber: Reading signed masked messages");
     for msg in list_signed_masked.iter() {
@@ -134,8 +131,9 @@ async fn main() -> Fallible<()> {
     }
 
     //Read all tagged messages
-    let list_tagged: Vec<(Option<String>, Option<String>)> =
-        channel_subscriber.read_tagged(tagged_packed_tag).unwrap();
+    let list_tagged: Vec<(Option<String>, Option<String>)> = channel_subscriber
+        .read_tagged(tags[3].clone().unwrap())
+        .unwrap();
     println!("Subscriber: Reading tagged messages");
     for msg in list_tagged.iter() {
         let (public, masked) = msg;
